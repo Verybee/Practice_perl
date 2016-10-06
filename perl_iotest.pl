@@ -50,23 +50,39 @@ sub write_wire{
 sub connect{
   my $unit_cont=0;
   my $pin_name;
+  my $wire_cont=0;
+  my $output_cont=0;
+  my @unit_temp=();
   if(!open TEMP, "< lib_temp"){die "Can not open temp file!\n"}
   while(<TEMP>){
-    if(/cell_name.(.*)/){
+    if(/^cell_name.(.*)/){
       $unit_cont+=1;
-      print TAR "\t$1 U$unit_cont ( ";
+      $output_cont=0;
+      push @unit_temp,"\t$1 U$unit_cont (";
     }
-    if(/input.(.*)/){
+    if(/^input.(.*)/){
       $pin_name=$1;
-      if($unit_cont==1){print TAR ".$pin_name(in),"}
-      else{printf TAR ".$pin_name(net_%d),",$unit_cont-1}
+      $wire_cont=$unit_cont-1;
+      if($unit_cont==1){push @unit_temp,".$pin_name(in),"}
+      else{push @unit_temp,".$pin_name(net_$wire_cont),"}
     }
-    if(/output.(.*)/){
+    if(/^output.(.*)/){
       $pin_name=$1;
-      if($unit_cont==$cell_cont){print TAR ".$pin_name(out),"}
-      else{printf TAR ".$pin_name(net_%d),",$unit_cont}
+      $output_cont+=1;
+      $wire_cont=$unit_cont;
+      push @unit_temp,".$pin_name(";
+      if($output_cont==1){
+        if($unit_cont==$cell_cont){push @unit_temp,"out"}
+        else{push @unit_temp,"net_$wire_cont"}
+      }
+      push @unit_temp,"),";
     }
-    if(/cell_end/){print TAR " );\n"}
+    if(/^cell_end/){
+      pop @unit_temp;
+      push @unit_temp,"));\n";
+      print TAR "@unit_temp";
+      @unit_temp=();
+    }
   }
   close TEMP;
   unlink lib_temp;
