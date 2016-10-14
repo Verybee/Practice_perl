@@ -1,6 +1,5 @@
 This project is for mine own practice on perl.
 
-perl_helloworld.pl    -->	helloworld
-perl_3.2.pl			      -->	homework
-perl_iotest.pl        --> practice of io and search
-
+perl_helloworld.pl    --> helloworld
+perl_3.2.pl           --> homework
+perl_iotest.pl        --> Verilog auto buliding script

@@ -1,107 +1,60 @@
 #!/usr/bin/perl -w
-sub read_lib{
+@body=();
+sub function{
   if(!open LIB, "< $LIB_NAME"){die "Can not open lib file!\n"}
-  if(!open TEMP, "> lib_temp"){die "Can not open temp file!\n"}
-  $cell_cont=0;
-  my $incell_sign=0;
-  my $cell_name;
+  my ($connect,$net_cont,$cell_name,$pin_name,$cell_cont,$output_cont);
   my @b_cont=();
+  my $incell_sign=0;
   while(<LIB>) {
-    if(/^cell\b.(.*).../){
-      print TEMP "cell_name $1\n";
+    if(/^cell\((.*)\)/){
       $incell_sign=1;
       $cell_cont += 1;
+      $connect="\t".$1." U$cell_cont"." ("
     }
-    if(/^...pin\b.(.*).../){print TEMP "input $1\n"}
-    if(/^..pin\b.(.*).../){print TEMP "output $1\n"}
+    if(/^\s+pin\((.*)\)/){$connect.=".".$1."("}
+    if(/input;/&$incell_sign){$connect.="net_".($cell_cont-1)."),"}
+    if(/output;/&$incell_sign){
+      $output_cont+=1;
+      if($output_cont==1){$connect.="net_".($cell_cont)."),"}
+      else{$connect.="),"}
+    }
     if(m/{/& $incell_sign){unshift @b_cont,1}
     if(m/}/& $incell_sign){shift @b_cont}
     if((!@b_cont)& $incell_sign){
-      printf TEMP "cell_end\n";
+      $_=$connect.");\n";
+      s/\),\)/\)\)/;
       $incell_sign=0;
-    }
-  }
-  close LIB;
-  close TEMP;
-  if($cell_cont==0){unlink lib_temp;die "Empty Lib file!\n"}
-  print "Reading lib file succeeded! This Lib has $cell_cont cells.\n";
-}
-
-sub write_head{
-  print TAR "//****************************************//\n";
-  print TAR "//This file is auto built by perl\n";
-  print TAR "//****************************************//\n";
-  print TAR "module $TAR_NAME\n\t(\n\t\tinput in,\n\t\toutput out\n\t);\n\n";
-}
-sub write_end{
-  print TAR "\nendmodule\n\n";
-}
-
-sub write_wire{
-  my $wire_cont = $cell_cont-1;
-  print TAR "\twire";
-  foreach(1..$wire_cont){
-    if($_==$wire_cont){print TAR " net_$_;"}
-    else {print TAR " net_$_,"}
-  }
-  print TAR "\n";
-}
-
-sub connect{
-  my $unit_cont=0;
-  my $pin_name;
-  my $wire_cont=0;
-  my $output_cont=0;
-  my @unit_temp=();
-  if(!open TEMP, "< lib_temp"){die "Can not open temp file!\n"}
-  while(<TEMP>){
-    if(/^cell_name.(.*)/){
-      $unit_cont+=1;
       $output_cont=0;
-      push @unit_temp,"\t$1 U$unit_cont (";
-    }
-    if(/^input.(.*)/){
-      $pin_name=$1;
-      $wire_cont=$unit_cont-1;
-      if($unit_cont==1){push @unit_temp,".$pin_name(in),"}
-      else{push @unit_temp,".$pin_name(net_$wire_cont),"}
-    }
-    if(/^output.(.*)/){
-      $pin_name=$1;
-      $output_cont+=1;
-      $wire_cont=$unit_cont;
-      push @unit_temp,".$pin_name(";
-      if($output_cont==1){
-        if($unit_cont==$cell_cont){push @unit_temp,"out"}
-        else{push @unit_temp,"net_$wire_cont"}
-      }
-      push @unit_temp,"),";
-    }
-    if(/^cell_end/){
-      pop @unit_temp;
-      push @unit_temp,"));\n";
-      print TAR "@unit_temp";
-      @unit_temp=();
+      push(@body,$_);
     }
   }
-  close TEMP;
-  unlink lib_temp;
+  $_=shift @body;
+  s/net_0/in/g;
+  unshift (@body,$_);
+  $_=pop @body;
+  s/net_$cell_cont/out/g;
+  push(@body,$_."\nendmodule");
+  close LIB;
+  if($cell_cont==0){die "Empty Lib file!\n"}
+  print "Reading lib file succeeded! This Lib has $cell_cont cells.\n";
+  $connect="\twire";
+  foreach(1..($cell_cont-1)){$connect.=" net_".$_.","}
+  $_=$connect.";\n";
+  s/,;/;/;
+  unshift(@body,$_);
+  unshift(@body,$head);
 }
-
 sub write_file{
   if(!open TAR, "> $TAR_NAME.v"){die "Can not open $TAR_NAME.v file!$!"}
-  &write_head;
-  &write_wire;
-  &connect;
-  &write_end;
+  print TAR @body;
   close TAR;
   print "Writting $TAR_NAME.v succeeded!\n";
 }
-
 $LIB_NAME = shift @ARGV;
 $TAR_NAME = shift @ARGV;
 if(!$LIB_NAME){print "Please type lib_name:";chomp($LIB_NAME = <STDIN>)}
 if(!$TAR_NAME){print "Please type target_name:";chomp($TAR_NAME = <STDIN>)}
-&read_lib;
+$head="//This file is auto built by perl\n\nmodule $TAR_NAME\n\t(\n\t\tinput in,\n\t\toutput out\n\t);\n\n";
+&function;
 &write_file;
 exit 1
